@@ -1,9 +1,10 @@
 from django.http import HttpResponse, JsonResponse
 
-from quicknotes.serializers import NoteSerializer, CollectionSerializer
+from quicknotes.serializers import CollectionWithNotesSerializer, NoteSerializer, CollectionSerializer
 from .models import Note, Collection
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
+from rest_framework.decorators import action
 
 # from django.db import connection
 
@@ -19,16 +20,22 @@ class NoteViewSet(ModelViewSet):
 	serializer_class = NoteSerializer
 
 	def get_queryset(self):
-		return Note.objects.select_related("collection").all()
+		qs = Note.objects.select_related("collection")
+
+		collection_id = self.request.query_params.get("collection_id")
+		print(collection_id)
+		if collection_id:
+			qs = qs.filter(collection_id=collection_id)
+		return qs.order_by("id")
 
 	# to get a list of data
-	def list(self, request, *args, **kwargs):
-		queryset = self.filter_queryset(self.get_queryset())
-		serializer = self.get_serializer(queryset, many=True)
+	# def list(self, request, *args, **kwargs):
+	# 	queryset = self.filter_queryset(self.get_queryset())
+	# 	serializer = self.get_serializer(queryset, many=True)
 
-		data = serializer.data
-		# print(len(connection.queries))
-		return Response({"data": data})
+	# 	data = serializer.data
+	# 	# print(len(connection.queries))
+	# 	return Response({"data": data})
 	
 	def retrieve(self, request, *args, **kwargs):
 		instance = self.get_object()
@@ -48,4 +55,17 @@ class CollectionViewSet(ModelViewSet):
 	def retrieve(self, request, *args, **kwargs):
 		instance = self.get_object()
 		serializer = self.get_serializer(instance)
+		return Response({"data": serializer.data})
+	
+	@action(detail=True, methods=["GET"])
+	def notes(self, request, pk=None):
+		# grab all notes for collection
+		collection = Collection.objects.prefetch_related("notes").get(pk=pk)
+	
+		# serializer = CollectionSerializer(collection)
+		# serializer_notes = NoteSerializer(collection.notes, many=True) # type:ignore
+
+		# return Response({"data": {**dict(serializer.data), "notes":serializer_notes.data}})
+
+		serializer = CollectionWithNotesSerializer()
 		return Response({"data": serializer.data})
